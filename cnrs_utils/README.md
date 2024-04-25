@@ -9,18 +9,25 @@ Classification of Crises in the US and France based on Tweets and Meteorological
 
 ⭐ Introduce US data in general. 
 
+US Data is the dataset from Humaid from Alam, F., Qazi, U., Imran, M., & Ofli, F. (2021, May). Humaid: Human-annotated disaster incidents data from twitter with deep learning benchmarks. In Proceedings of the International AAAI Conference on Web and social media (Vol. 15, pp. 933-942). but to to link nlp data and time series i needed to find a way. Thankfully i saw that the same authors made another paper Suwaileh, R., Elsayed, T., & Imran, M. (2023). IDRISI-RE: A generalizable dataset with benchmarks for location mention recognition on disaster tweets. Information Processing & Management, 60(3), 103340. This paper introduce IDRISI, a subset of HumAID with location mention. So i used Idrisi and i linked all the data wich are related to US crisis because i got acess to american meterological data.
+
 ❓What are the practical crisis in it?  'Hurricane', 'WildFire', 'Flood'?
+
+Exactly
 
 ❓ How many tweets in total and per crisis? Please complete the following Table.
 
 | Hurricane | WildFire | Flood |
 |-----------|----------|-------|
-|           |          |       |
+|   4120    |   1087   |  431  |
 
 ❓ What are the classes/labels we want to classify? Predictable Crisis, Sudden Crisis?
 
-❓ What is the frequency of the TS?
+The Labels are Not_Crisis_period ,Sudden_Crisis, Predictible_Crisis
 
+
+❓ What is the frequency of the TS?
+The time series is a daily summary of the meterogical information so the frequency is daily.
 
 ### 1.2. French data
 ⭐ Introduce French data in general. 
@@ -29,7 +36,7 @@ Classification of Crises in the US and France based on Tweets and Meteorological
 
 | Fire | Explosion | Attack | Collapse | Storms | Flood | Hurricane | Non-Crisis |
 |------|-----------|--------|----------|--------|-------|-----------|------------|
-|      |           |        |          |        |       |           |            |
+| 2942 |    1890   |        |          |        |  5762 |           |            |
 
 
 
