@@ -5,8 +5,8 @@ from cnrs_utils.linker_FR import linker
 directory_time_series = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP'
 file_nlp = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP/French_Corpus.csv'
 path_knowledge = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP/crisis_knowledge_FR.csv'
-Knowledge = pd.read_csv(path_knowledge, sep=',')
-Nlp_data = pd.read_csv(file_nlp, delimiter='\t', encoding='utf-8')
+Knowledge = pd.read_csv(path_knowledge, sep=',')  # (13, 5)
+Nlp_data = pd.read_csv(file_nlp, delimiter='\t', encoding='utf-8')  # (19595, 62)
 
 # choose train / test
 # All_crisis = ['Wildfire ', 'Earthquake', 'Haze', 'Flood', 'Other', 'Terrorist_attack', 'Huricane']
@@ -18,27 +18,11 @@ type_counts = nlp_crisis.value_counts()
 
 nlp_train, nlp_test = Nlp_data[~Nlp_data.type_crisis.isin(Test_crisis)], Nlp_data[Nlp_data.type_crisis.isin(Test_crisis)]
 
-# Train_da = Knowledge[Knowledge['Crisis_Type'] != Test_crisis]
-# Test_knowledge = Knowledge[Knowledge['Crisis_Type'] == Test_crisis]
 
 # link the data
-train_multi_modal = linker(nlp_train,
-                           Knowledge,
-                           directory_time_series,
-                           5,
-                           'Crisis_Predictability',
-                           'label',
-                           'date',
-                           0)
+train_multi_modal = linker(nlp_train, Knowledge, directory_time_series, 24, 'Crisis_Predictability', 'label', 'date', 0)
 
-test_multi_modal = linker(nlp_test,
-                          Knowledge,
-                          directory_time_series,
-                          5,
-                          'Crisis_Predictability',
-                          'label',
-                          'date',
-                          0)
+test_multi_modal = linker(nlp_test, Knowledge, directory_time_series, 24, 'Crisis_Predictability', 'label', 'date', 0)
 
 print(train_multi_modal.head())
 print(test_multi_modal.head())

@@ -2,6 +2,21 @@ import numpy as np
 import pandas as pd
 import os
 from sklearn import preprocessing
+from sklearn.preprocessing import StandardScaler
+from collections import Counter
+
+
+def to_label(label_series: pd.Series) -> int:
+	label_array = label_series.to_numpy()
+
+	# If all time stamps are Non-crisis, then this day is labeled as 0
+	if (label_array == 0).all():
+		return 0
+	else:
+		# Otherwise, label the day as the most common crisis except Non-crisis
+		counts = Counter(label_array[label_array != 0])  # Use Counter to count occurrences, ignoring zeros
+		most_common = counts.most_common(1)[0][0]
+		return most_common
 
 
 # this function put on the good format the date from the time series dataset
@@ -20,30 +35,36 @@ def window_zeros_creation(window_ref):
 	return np.zeros(window_ref.shape)
 
 
-# the function takes a time series dataframe (df) and return another dataset with all the data put in one parameter
-# (Window) except the date and the label which are in different columns
-# window size is equal to the size of the window
-def window_creation(df,size_window,label_column,label_2_column,timestamp_colum):
+def window_creation(df, size_window, label_column, label_2_column, timestamp_colum):
 	good_row = list(df.columns)
 	good_row.remove(label_column)
 	good_row.remove(label_2_column)
 	good_row.remove(timestamp_colum)
+
 	window_df = df[good_row]
 	window_df = window_df.reset_index()
 	window_df = window_df.drop(columns=['index'])
+	# ToDo: Normalize over the entire ts data, instead of windows.
+	scaler = StandardScaler()
+	window_df = pd.DataFrame(scaler.fit_transform(window_df), columns=window_df.columns)
+
 	label_df = df[label_column]
 	label_df = label_df.reset_index()
 	label_df = label_df.drop(columns=['index'])
+
 	date_df = df[timestamp_colum]
 	date_df = date_df.reset_index()
 	date_df = date_df.drop(columns=['index'])
+
 	window_data = []
 	label_data = []
 	date_data = []
-	for i in range(len(df)-size_window):  # Distance is 1.
+	# ToDo: Distance is 8 (1 day), create a window for each date.
+	#  Discard the first several days that do not contain contact history.
+	for i in range(size_window, len(df)-size_window, 8):
 		my_window = window_df.loc[i:i+size_window-1]  # loc includes both staring and ending index
-		window_data.append(preprocessing.normalize(my_window.to_numpy()))
-		label_data.append(int(label_df.loc[i+size_window-1]))
+		window_data.append(my_window.to_numpy())
+		label_data.append(to_label(label_df.loc[i+size_window-8:i+size_window-1]))  # Assign the label of the target day
 		date_data.append(list(date_df.loc[i+size_window-1])[0])
 
 	return_value = pd.DataFrame({'Date': date_data, 'Window': window_data, 'label': label_data})
@@ -59,17 +80,17 @@ def window_creation(df,size_window,label_column,label_2_column,timestamp_colum):
 def linker(
 		text_data: object,
 		crisis_knowledge: object,
-		directory: str,
+		ts_directory: str,
 		window_size: int,
 		label_column_1: str,
 		label_column_2: str,
 		date_column: str,
 		fillNA: int) -> object:
-	# select
-	time_data = directory+'/MeteoData-FR'  # MeteoDataProcessed-FR
+
+	time_data = ts_directory + '/MeteoData-FR'  # MeteoData-FR / MeteoDataProcessed-FR
 	# we join crisis knowledge and NLP data on the name of the crisis
 	text_data = text_data.join(crisis_knowledge.set_index('Crisis Name'), on='event', validate='m:1')
-	# features to keep for Time series
+
 	features = ['numer_sta', 'date', 'pmer', 'tend', 'ff', 't', 'u', 'n', 'label', 'Crisis_Predictability']
 	list_of_date = []
 	list_of_text = []
@@ -93,7 +114,8 @@ def linker(
 					# creation of the windows. Intervals between time steps is 3 hour.
 					temp = my_features[my_features['numer_sta'] == station]  # the series of one station
 					temp = temp.drop(columns=['numer_sta'])
-					window_df = window_creation(temp,window_size, label_column_1, label_column_2, date_column)
+
+					window_df = window_creation(temp, window_size, label_column_1, label_column_2, date_column)
 					# each time dataframe of window is linked to the related station
 					# window_df is in shape of (num_windows, 3), 3 columns are 'Date' 'Window' 'label'.
 					# Window is the nparray of a window. label is its int class label.
@@ -134,15 +156,9 @@ def linker(
 										for window in good_date['Window']:  # window: (window_size, num_features)
 											temp_list.append(window)
 
-							# if there is multiple data with the same day we make the mean of these data
-							# Todo: It's not a good practice. Can have multi windows from multi stations.
+							# ToDo: No need to compute mean of windows. Now each day only contains 1 time series window
 							if temp_list:
-								# Stack the arrays along a new axis
-								temp_list_clean = [x for x in temp_list if x is not None and (not isinstance(x, list) or None not in x)]
-								
-								stacked_array = np.stack(temp_list_clean)
-								# Compute the mean along the newly created axis (axis 0)
-								mean_array = np.mean(stacked_array, axis=0)
+								mean_array = temp_list[0]
 							else:
 								mean_array = window_zeros_creation(list(window_df['Window'])[0])
 
@@ -157,7 +173,6 @@ def linker(
 								else:
 									list_of_label.append('Sudden_Crisis')
 
-							end = 1
 	df_return = pd.DataFrame({'Date': list_of_date, 'Text': list_of_text, 'Window': list_of_window, 'label': list_of_label})
 	return df_return
 
