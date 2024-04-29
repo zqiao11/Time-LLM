@@ -137,7 +137,7 @@ def linker(
 							if text_line['CAT2'] == 'Message-NonUtilisable' :
 								list_of_label.append('Not_Crisis_period')
 							else:
-								if text_line['type_crisis'] == 'Flood' or text_line['type_crisis'] == 'Hurricane' or text_line['type_crisis'] == 'Storm':
+								if text_line['type_crisis'] == 'Flood' or text_line['type_crisis'] == 'Hurricane' or text_line['type_crisis'] == 'Storms':
 									list_of_label.append('Ecological_crisis')
 								else:
 									list_of_label.append('Sudden_Crisis')
@@ -191,7 +191,7 @@ def linker(
 								list_of_text.append(text_line['text'])
 								list_of_window.append(mean_array)
 								list_of_crisis_type.append(text_line['type_crisis'])
-								if text_line['type_crisis'] == 'Flood' or text_line['type_crisis'] == 'Hurricane' or text_line['type_crisis'] == 'Storm':
+								if text_line['type_crisis'] == 'Flood' or text_line['type_crisis'] == 'Hurricane' or text_line['type_crisis'] == 'Storms':
 									list_of_label.append('Ecological_crisis')
 								else:
 									list_of_label.append('Sudden_Crisis')
