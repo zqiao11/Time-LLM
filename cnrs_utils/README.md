@@ -34,9 +34,12 @@ The time series is a daily summary of the meterogical information so the frequen
 
 ❓ How many tweets in total and per crisis? Please complete the table.
 
-| Fire | Explosion | Attack | Collapse | Storms | Flood | Hurricane | Non-Crisis |
-|------|-----------|--------|----------|--------|-------|-----------|------------|
-| 2942 |    1890   |        |          |        |  5762 |           |            |
+|   Crisis   | Fire | Explosion | Attack | Collapse | Storms | Flood | Hurricane |    Total   |
+|------------|------|-----------|--------|----------|--------|-------|-----------|------------|
+|  By Crisis | 2942 |    1890   |  1382  |   1269   |  5760  |  3593 |    2160   |    18996   |
+|------------|------|-----------|--------|----------|--------|-------|-----------|------------|
+|   Crisis   | 1464 |    1747   |  1208  |   322    |  1092  |  1426 |    742    |    8001    |
+| Not Crisis | 1478 |    143    |   174  |   947    |  4668  |  2167 |    1418   |    10995   |
 
 
 
