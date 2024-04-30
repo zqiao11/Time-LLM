@@ -20,7 +20,7 @@ for row in multi_modal_data["Window"]:
 	a = a.replace("]","")
 	a = a.split("\n")
 	for i in range(len(a)) :
-		while '  ' in a[j] :
+		while '  ' in a[i] :
 			a[i]= a[i].replace('  ',' ')
 		a[i]= a[i].strip(' ')
 		a[i]= a[i].split(" ")
