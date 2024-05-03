@@ -8,7 +8,7 @@ path_knowledge = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP/crisis_knowledge_EN.
 knowledge = pd.read_csv(path_knowledge, sep='\t')  # (9, 3), 3 columns represent Crisis, Places, Path_name (tweets)
 
 # for all test crisis in english
-All_possible_crisis = ['Hurricane', 'WildFire', 'Flood']
+All_possible_crisis = ['Hurricane', 'WildFire', 'Flood','Earthquake']
 Test_crisis = 'Hurricane'
 
 Train_knowledge = knowledge[knowledge['Crisis'] != Test_crisis]
