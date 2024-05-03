@@ -96,11 +96,12 @@ def linker(
 
 		# Window Creation
 		window_df = window_creation(ts_df, window_size, label_column, date_column)
-
-		#  we get the keywords to link the location mention to the state
-		tags_city = open_state_file(ts_dataset_path, state, 'city')
-		tags_county = open_state_file(ts_dataset_path, state, 'county')
-		tags_state = open_state_file(ts_dataset_path, state, 'state')
+		#since New Zealand has no keyword, we skip this part
+		if state != 'New_Zealand' :
+			#  we get the keywords to link the location mention to the state
+			tags_city = open_state_file(ts_dataset_path, state, 'city')
+			tags_county = open_state_file(ts_dataset_path, state, 'county')
+			tags_state = open_state_file(ts_dataset_path, state, 'state')
 		date = []
 		text = []
 		label_final = []
@@ -120,7 +121,8 @@ def linker(
 					# thanks to the crisis_to_link, we know which crisis this tweet make reference
 					# (the tweet speak about this crisis) so we assume that if location mention is empty
 					# we assume that the tweet make a reference to the current state since this state is the localisation of the crisis
-							if place == []:
+							#we still have the New Zealand special case
+							if place == [] or state == 'New_Zealand':
 								# Put NLP date on the same format as time series date
 								date_NLP = to_date(result['created_at'])
 								# Check if there is matching date between time series and tweets.
@@ -131,7 +133,7 @@ def linker(
 									my_window = list(linked_data['Window'])[0]
 									window_data.append(my_window)
 									# for the label, we take reference from the time series label
-									label_final.append(linked_data['label'])
+									label_final.append(list(linked_data['label'])[0])
 
 							# Todo: I think you incorrectly set the level of else here.
 							else:
@@ -148,7 +150,7 @@ def linker(
 										linked_data = window_df[window_df['Date'] == date[-1]]
 										my_window = list(linked_data['Window'])[0]
 										window_data.append(my_window)
-										label_final.append(linked_data['label'])  # Use TS's label as mm sample's label
+										label_final.append(list(linked_data['label'])[0])  # Use TS's label as mm sample's label
 		df = pd.DataFrame({'Date': date, 'Text': text, 'Window': window_data, 'label': label_final})
 		df_return = pd.concat([df_return, df])
 	return df_return
