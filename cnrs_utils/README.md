@@ -17,9 +17,11 @@ Exactly
 
 ❓ How many tweets in total and per crisis? Please complete the following Table.
 
-| Hurricane | WildFire | Flood |
-|-----------|----------|-------|
-|   4120    |   1087   |  431  |
+|   Crisis   | Hurricane | WildFire | Flood | Earthquake | Total |
+|------------|-----------|----------|-------|------------|-------|
+|  By Crisis |   4120    |   1087   |  431  |    1105    |  6743 |
+|   Crisis   |   3941    |   1087   |  431  |     896    |  6355 |
+| Not Crisis |    179    |     0    |   0   |     209    |   388 |   
 
 ❓ What are the classes/labels we want to classify? Predictable Crisis, Sudden Crisis?
 
@@ -36,7 +38,7 @@ The time series is a daily summary of the meterogical information so the frequen
 
 |   Crisis   | Fire | Explosion | Attack | Collapse | Storms | Flood | Hurricane |    Total   |
 |------------|------|-----------|--------|----------|--------|-------|-----------|------------|
-|  By Crisis | 2942 |    1890   |  1382  |   1269   |  5760  |  3593 |    2160   |    18996   |
+|  By Crisis | 1040 |    1890   |  1382  |   1269   |  5760  |  3593 |    2160   |    18996   |
 |------------|------|-----------|--------|----------|--------|-------|-----------|------------|
 |   Crisis   | 1464 |    1747   |  1208  |   322    |  1092  |  1426 |    742    |    8001    |
 | Not Crisis | 1478 |    143    |   174  |   947    |  4668  |  2167 |    1418   |    10995   |
@@ -62,7 +64,10 @@ To formulate multi-modal datasets, we need to link each tweet with its associate
 ### 2.1 US data
 ⭐ Link based on date and location information.
 
+Done
 
 ### 2.2 French data
 
 ⭐ Link based on date and Event.
+
+Done
