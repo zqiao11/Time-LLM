@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import json
+from sklearn.preprocessing import StandardScaler
 
 
 # this function put on the good format the date from the nlp dataset
@@ -31,7 +32,6 @@ def open_state_file(dataset_path: str, STATE: str, CATEGORY: str) -> list[str]:
 # (Window) except the date and the label which are in different columns
 # window size is equal to the size of the window
 
-# Todo:
 def window_creation(df: object, window_size: int, label_column: str, timestamp_colum: str) -> object:
 	"""
 	Create a TS window for each date. Distance of sliding window is 1.
@@ -41,13 +41,14 @@ def window_creation(df: object, window_size: int, label_column: str, timestamp_c
 	label_column: Name of the column of label
 	timestamp_colum: Name of the column of time stamp
 	"""
-	# ToDo: Now this function extract windows in sequential order.
 	df = df.reset_index()
 	df = df.drop(columns=['index'])
-	good_row = list(df.columns)
-	good_row.remove(label_column)
-	good_row.remove(timestamp_colum)
-	window_df = df[good_row]
+	good_columns = list(df.columns)
+	good_columns.remove(label_column)
+	good_columns.remove(timestamp_colum)
+	window_df = df[good_columns]
+	scaler = StandardScaler()
+	window_df = pd.DataFrame(scaler.fit_transform(window_df), columns=window_df.columns)
 	label_df = df[label_column]
 	date_df = df[timestamp_colum]
 	window_data = []
@@ -89,18 +90,17 @@ def linker(
 	for state in states:
 		# Open the time series file corresponding to the state
 		ts_df = pd.read_csv(ts_dataset_path + '/' + state + '/' + state + '_mean_data_LLM.csv')
-
-		# ToDO: You must sort the df by date! It is random ordered originally!Otherwise it is not time series!
 		ts_df = ts_df[features].sort_values(by='date')  # Frequency of TS is per day.
 		ts_df = ts_df.fillna(fillNA)
 
 		# Window Creation
 		window_df = window_creation(ts_df, window_size, label_column, date_column)
-
-		#  we get the keywords to link the location mention to the state
-		tags_city = open_state_file(ts_dataset_path, state, 'city')
-		tags_county = open_state_file(ts_dataset_path, state, 'county')
-		tags_state = open_state_file(ts_dataset_path, state, 'state')
+		#since New Zealand has no keyword, we skip this part
+		if state != 'New_Zealand' :
+			#  we get the keywords to link the location mention to the state
+			tags_city = open_state_file(ts_dataset_path, state, 'city')
+			tags_county = open_state_file(ts_dataset_path, state, 'county')
+			tags_state = open_state_file(ts_dataset_path, state, 'state')
 		date = []
 		text = []
 		label_final = []
@@ -108,7 +108,7 @@ def linker(
 
 		# Process NLP data and link to time series data
 		for root, dirs, files in os.walk(corpus_path + '/' + crisis_to_link['Path_name']):
-			for fil in files:   # Todo: What is the difference between train and dev?
+			for fil in files:
 				if fil.endswith('.jsonl'):
 					with open(os.path.join(root,fil), 'r') as json_file:
 						json_list = list(json_file)  # a list of '{}', each {} is a tweet and its features.
@@ -120,7 +120,8 @@ def linker(
 					# thanks to the crisis_to_link, we know which crisis this tweet make reference
 					# (the tweet speak about this crisis) so we assume that if location mention is empty
 					# we assume that the tweet make a reference to the current state since this state is the localisation of the crisis
-							if place == []:
+							#we still have the New Zealand special case
+							if place == [] or state == 'New_Zealand':
 								# Put NLP date on the same format as time series date
 								date_NLP = to_date(result['created_at'])
 								# Check if there is matching date between time series and tweets.
@@ -131,9 +132,8 @@ def linker(
 									my_window = list(linked_data['Window'])[0]
 									window_data.append(my_window)
 									# for the label, we take reference from the time series label
-									label_final.append(linked_data['label'])
+									label_final.append(list(linked_data['label'])[0])
 
-							# Todo: I think you incorrectly set the level of else here.
 							else:
 								for zone in place:
 									# if the location mention refer to a state and this reference is in our knowledge database
@@ -148,7 +148,7 @@ def linker(
 										linked_data = window_df[window_df['Date'] == date[-1]]
 										my_window = list(linked_data['Window'])[0]
 										window_data.append(my_window)
-										label_final.append(linked_data['label'])  # Use TS's label as mm sample's label
+										label_final.append(list(linked_data['label'])[0])  # Use TS's label as mm sample's label
 		df = pd.DataFrame({'Date': date, 'Text': text, 'Window': window_data, 'label': label_final})
 		df_return = pd.concat([df_return, df])
 	return df_return
