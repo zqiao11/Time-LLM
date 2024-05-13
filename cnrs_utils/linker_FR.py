@@ -96,6 +96,7 @@ def linker(
 	list_of_text = []
 	list_of_window = []
 	list_of_label = []
+	list_of_crisis_type = []	
 
 	# Loop over time series data
 	for root, dirs, files in os.walk(time_data):
@@ -129,13 +130,14 @@ def linker(
 						if text_line['Related station'] != text_line['Related station']:  # False if NaN
 							list_of_date.append(text_line['date'])
 							list_of_text.append(text_line['text'])
+							list_of_crisis_type.append(text_line['type_crisis'])
 							# we create a mask window full of zeros with the same size as other windows
 							list_of_window.append(window_zeros_creation(list(window_df['Window'])[-1]))
 							# if the message is not usefull then this is not related to a crisis
 							if text_line['CAT2'] == 'Message-NonUtilisable' :
 								list_of_label.append('Not_Crisis_period')
 							else:
-								if text_line['type_crisis'] == 'Flood' or text_line['type_crisis'] == 'Hurricane' or text_line['type_crisis'] == 'Storm':
+								if text_line['type_crisis'] == 'Flood' or text_line['type_crisis'] == 'Hurricane' or text_line['type_crisis'] == 'Storms':
 									list_of_label.append('Ecological_crisis')
 								else:
 									list_of_label.append('Sudden_Crisis')
@@ -144,35 +146,56 @@ def linker(
 							for i in range(len(list_of_station)):
 								list_of_station[i] = int(list_of_station[i])
 							# station related to the crisis
-							for station in list_of_station:
-								temp_list = []
-								# if the station is in the time series data
-								if station in dict_by_station.keys() :
+							if text_line['CAT2'] == 'Message-NonUtilisable':
+								current_station = random.choice(list_of_station)
+								if current_station in dict_by_station.keys() :
 									# we take all the data related to this station
-									sample_station = dict_by_station[station]
+									sample_station = dict_by_station[current_station]
 									# we choose only the one with the good date
 									good_date = sample_station[sample_station['Date'] == text_line['date']]
 									if len(list(good_date['Window'])) != 0:
 										for window in good_date['Window']:  # window: (window_size, num_features)
 											temp_list.append(window)
-
-							# ToDo: No need to compute mean of windows. Now each day only contains 1 time series window
-							if temp_list:
-								mean_array = temp_list[0]
-							else:
-								mean_array = window_zeros_creation(list(window_df['Window'])[0])
-
-							list_of_date.append(text_line['date'])
-							list_of_text.append(text_line['text'])
-							list_of_window.append(mean_array)
-							if text_line['CAT2'] == 'Message-NonUtilisable':
+								# ToDo: No need to compute mean of windows. Now each day only contains 1 time series window
+								if temp_list:
+									mean_array = temp_list[0]
+								else:
+									mean_array = window_zeros_creation(list(window_df['Window'])[0])
+	
+								list_of_date.append(text_line['date'])
+								list_of_text.append(text_line['text'])
+								list_of_window.append(mean_array)
 								list_of_label.append('Not_Crisis_period')
-							else:
-								if text_line['type_crisis'] == 'Flood' or text_line['type_crisis'] == 'Hurricane' or text_line['type_crisis'] == 'Storm':
+								list_of_crisis_type.append(text_line['type_crisis'])
+								
+							else :
+								for station in list_of_station:
+									temp_list = []
+									# if the station is in the time series data
+									if station in dict_by_station.keys() :
+										# we take all the data related to this station
+										sample_station = dict_by_station[station]
+										# we choose only the one with the good date
+										good_date = sample_station[sample_station['Date'] == text_line['date']]
+										if len(list(good_date['Window'])) != 0:
+											for window in good_date['Window']:  # window: (window_size, num_features)
+												temp_list.append(window)
+	
+								# ToDo: No need to compute mean of windows. Now each day only contains 1 time series window
+								if temp_list:
+									mean_array = temp_list[0]
+								else:
+									mean_array = window_zeros_creation(list(window_df['Window'])[0])
+	
+								list_of_date.append(text_line['date'])
+								list_of_text.append(text_line['text'])
+								list_of_window.append(mean_array)
+								list_of_crisis_type.append(text_line['type_crisis'])
+								if text_line['type_crisis'] == 'Flood' or text_line['type_crisis'] == 'Hurricane' or text_line['type_crisis'] == 'Storms':
 									list_of_label.append('Ecological_crisis')
 								else:
 									list_of_label.append('Sudden_Crisis')
 
-	df_return = pd.DataFrame({'Date': list_of_date, 'Text': list_of_text, 'Window': list_of_window, 'label': list_of_label})
+	df_return = pd.DataFrame({'Date': list_of_date, 'Text': list_of_text,'Crisis_Type' : list_of_crisis_type, 'Window': list_of_window, 'label': list_of_label})
 	return df_return
 
