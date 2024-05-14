@@ -2,22 +2,30 @@ import argparse
 import torch
 from accelerate import Accelerator, DeepSpeedPlugin
 from accelerate import DistributedDataParallelKwargs
-from torch import nn, optim
+from torch import optim
 from torch.optim import lr_scheduler
 from tqdm import tqdm
 
-from models import Autoformer, DLinear, TimeLLM
+from cnrs_project.ENG.TimeLLM import Model
 
-from data_provider.data_factory import data_provider
 import time
 import random
 import numpy as np
 import os
+import pandas as pd
+from cnrs_project.ENG.linker_ENG import linker
+from cnrs_project.ENG.functional import Logger
+from cnrs_project.ENG.data_factory import MMDataset, out_of_type_train_test
+from torch.utils.data import DataLoader
+from sklearn.model_selection import train_test_split
+from cnrs_project.ENG.functional import FocalLoss, vali
+import sys
+
 
 os.environ['CURL_CA_BUNDLE'] = ''
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:64"
 
-from utils.tools import del_files, EarlyStopping, adjust_learning_rate, vali, load_content
+from utils.tools import del_files, EarlyStopping, adjust_learning_rate
 
 parser = argparse.ArgumentParser(description='Time-LLM')
 
@@ -27,36 +35,19 @@ torch.manual_seed(fix_seed)
 np.random.seed(fix_seed)
 
 # basic config
-parser.add_argument('--task_name', type=str, required=False, default='long_term_forecast',
+parser.add_argument('--task_name', type=str, required=False, default='classification',
                     help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
 parser.add_argument('--is_training', type=int, required=False, default=1, help='status')
 parser.add_argument('--model_id', type=str, required=False, default='test', help='model id')
 parser.add_argument('--model_comment', type=str, required=False, default='none', help='prefix when saving test results')
-parser.add_argument('--model', type=str, required=False, default='TimeLLM',
-                    help='model name, options: [Autoformer, DLinear]')
 parser.add_argument('--seed', type=int, default=2021, help='random seed')
 
 # data loader
-parser.add_argument('--data', type=str, required=False, default='ETTm1', help='dataset type')
-parser.add_argument('--root_path', type=str, default='./dataset', help='root path of the data file')
-parser.add_argument('--data_path', type=str, default='ETTh1.csv', help='data file')
-parser.add_argument('--features', type=str, default='M',
-                    help='forecasting task, options:[M, S, MS]; '
-                         'M:multivariate predict multivariate, S: univariate predict univariate, '
-                         'MS:multivariate predict univariate')
-parser.add_argument('--target', type=str, default='OT', help='target feature in S or MS task')
-parser.add_argument('--loader', type=str, default='modal', help='dataset type')
-parser.add_argument('--freq', type=str, default='h',
-                    help='freq for time features encoding, '
-                         'options:[s:secondly, t:minutely, h:hourly, d:daily, b:business days, w:weekly, m:monthly], '
-                         'you can also use more detailed freq like 15min or 3h')
 parser.add_argument('--checkpoints', type=str, default='./checkpoints/', help='location of model checkpoints')
 
 # forecasting task
 parser.add_argument('--seq_len', type=int, default=96, help='input sequence length')
 parser.add_argument('--label_len', type=int, default=48, help='start token length')
-parser.add_argument('--pred_len', type=int, default=96, help='prediction sequence length')
-parser.add_argument('--seasonal_patterns', type=str, default='Monthly', help='subset for M4')
 
 # model define
 parser.add_argument('--enc_in', type=int, default=7, help='encoder input size')
@@ -74,46 +65,46 @@ parser.add_argument('--embed', type=str, default='timeF',
                     help='time features encoding, options:[timeF, fixed, learned]')
 parser.add_argument('--activation', type=str, default='gelu', help='activation')
 parser.add_argument('--output_attention', action='store_true', help='whether to output attention in encoder')
-parser.add_argument('--patch_len', type=int, default=16, help='patch length')
-parser.add_argument('--stride', type=int, default=8, help='stride')
+parser.add_argument('--patch_len', type=int, default=4, help='patch length')
+parser.add_argument('--stride', type=int, default=2, help='stride')
 parser.add_argument('--prompt_domain', type=int, default=0, help='')
 parser.add_argument('--llm_model', type=str, default='LLAMA', help='LLM model') # LLAMA, GPT2, BERT
 parser.add_argument('--llm_dim', type=int, default='4096', help='LLM model dimension')# LLama7b:4096; GPT2-small:768; BERT-base:768
 
-
 # optimization
 parser.add_argument('--num_workers', type=int, default=10, help='data loader num workers')
 parser.add_argument('--itr', type=int, default=1, help='experiments times')
-parser.add_argument('--train_epochs', type=int, default=10, help='train epochs')
-parser.add_argument('--align_epochs', type=int, default=10, help='alignment epochs')
-parser.add_argument('--batch_size', type=int, default=32, help='batch size of train input data')
-parser.add_argument('--eval_batch_size', type=int, default=8, help='batch size of model evaluation')
-parser.add_argument('--patience', type=int, default=10, help='early stopping patience')
-parser.add_argument('--learning_rate', type=float, default=0.0001, help='optimizer learning rate')
+parser.add_argument('--train_epochs', type=int, default=1, help='train epochs')
+parser.add_argument('--batch_size', type=int, default=16, help='batch size of train input data')
+parser.add_argument('--eval_batch_size', type=int, default=128, help='batch size of model evaluation')
+parser.add_argument('--patience', type=int, default=3, help='early stopping patience')
+parser.add_argument('--learning_rate', type=float, default=0.001, help='optimizer learning rate')
 parser.add_argument('--des', type=str, default='test', help='exp description')
-parser.add_argument('--loss', type=str, default='MSE', help='loss function')
 parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')
 parser.add_argument('--pct_start', type=float, default=0.2, help='pct_start')
 parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
 parser.add_argument('--llm_layers', type=int, default=6)
 parser.add_argument('--percent', type=int, default=100)
 
+parser.add_argument('--test_crisis', type=str, default='Hurricane',
+                    choices=['Hurricane', 'WildFire', 'Flood', 'Earthquake'])
+
+
 args = parser.parse_args()
 ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
-deepspeed_plugin = DeepSpeedPlugin(hf_ds_config='./ds_config_zero2.json')
+deepspeed_plugin = DeepSpeedPlugin(hf_ds_config='../ds_config_zero2.json')
 accelerator = Accelerator(kwargs_handlers=[ddp_kwargs], deepspeed_plugin=deepspeed_plugin)
+directory_nlp = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP/English_Corpus'
+directory_time_series = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP/MeteoData-US'
+path_knowledge = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP/crisis_knowledge_EN.csv'
+knowledge = pd.read_csv(path_knowledge, sep='\t')  # (9, 3), 3 columns represent Crisis, Places, Path_name (tweets)
 
 for ii in range(args.itr):
     # setting record of experiments
-    setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_{}_{}'.format(
+    setting = '{}_{}_sl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_{}_{}'.format(
         args.task_name,
         args.model_id,
-        args.model,
-        args.data,
-        args.features,
         args.seq_len,
-        args.label_len,
-        args.pred_len,
         args.d_model,
         args.n_heads,
         args.e_layers,
@@ -123,22 +114,33 @@ for ii in range(args.itr):
         args.embed,
         args.des, ii)
 
-    train_data, train_loader = data_provider(args, 'train')
-    vali_data, vali_loader = data_provider(args, 'val')
-    test_data, test_loader = data_provider(args, 'test')
+    train_df, test_df = out_of_type_train_test(knowledge, args.test_crisis,
+                                               linker, directory_nlp, directory_time_series)
 
-    if args.model == 'Autoformer':
-        model = Autoformer.Model(args).float()
-    elif args.model == 'DLinear':
-        model = DLinear.Model(args).float()
-    else:
-        model = TimeLLM.Model(args).float()
+    # Map label to int
+    dic_cat_labels = {'Not_Crisis_period': 0, 'Predictible_crisis': 1, 'Sudden_crisis': 2}
+    train_df['label'] = train_df['label'].map(dic_cat_labels)
+    test_df['label'] = test_df['label'].map(dic_cat_labels)
+
+    # Train val split
+    train_df, vali_df = train_test_split(train_df, test_size=0.2, random_state=42, shuffle=True)
+    train_data, vali_data, test_data = MMDataset(train_df), MMDataset(vali_df), MMDataset(test_df)
+    train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
+    vali_loader = DataLoader(vali_data, batch_size=args.eval_batch_size, shuffle=False)
+    test_loader = DataLoader(test_data, batch_size=args.eval_batch_size, shuffle=False)
+
+    # ZZ: Use the cumstom TimeLLM for classification
+    model = Model(args, n_classes=len(dic_cat_labels), n_vars=11).float()
 
     path = os.path.join(args.checkpoints,
                         setting + '-' + args.model_comment)  # unique checkpoint saving path
-    args.content = load_content(args)
+
+
     if not os.path.exists(path) and accelerator.is_local_main_process:
         os.makedirs(path)
+
+    log_dir = path + '/' + 'log.txt'
+    sys.stdout = Logger(log_dir)
 
     time_now = time.time()
 
@@ -161,8 +163,8 @@ for ii in range(args.itr):
                                             epochs=args.train_epochs,
                                             max_lr=args.learning_rate)
 
-    criterion = nn.MSELoss()
-    mae_metric = nn.L1Loss()
+    # ToDo: Classification loss
+    criterion = FocalLoss(gamma=5., alpha=0.25, num_classes=len(dic_cat_labels))  # torch.nn.CrossEntropyLoss()
 
     train_loader, vali_loader, test_loader, model, model_optim, scheduler = accelerator.prepare(
         train_loader, vali_loader, test_loader, model, model_optim, scheduler)
@@ -176,44 +178,29 @@ for ii in range(args.itr):
 
         model.train()
         epoch_time = time.time()
-        for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in tqdm(enumerate(train_loader)):
+        for i, (batch_date, batch_text, batch_win, batch_lab) in tqdm(enumerate(train_loader)):
             iter_count += 1
             model_optim.zero_grad()
 
-            batch_x = batch_x.float().to(accelerator.device)
-            batch_y = batch_y.float().to(accelerator.device)
-            batch_x_mark = batch_x_mark.float().to(accelerator.device)
-            batch_y_mark = batch_y_mark.float().to(accelerator.device)
-
-            # decoder input
-            dec_inp = torch.zeros_like(batch_y[:, -args.pred_len:, :]).float().to(
-                accelerator.device)
-            dec_inp = torch.cat([batch_y[:, :args.label_len, :], dec_inp], dim=1).float().to(
-                accelerator.device)
+            # batch_text = batch_text.to(accelerator.device)
+            batch_win = batch_win.float().to(accelerator.device)
+            batch_lab = batch_lab.to(torch.int64).to(accelerator.device)
 
             # encoder - decoder
             if args.use_amp:
                 with torch.cuda.amp.autocast():
                     if args.output_attention:
-                        outputs = model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
+                        outputs = model(batch_text, batch_win)[0]
                     else:
-                        outputs = model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
-
-                    f_dim = -1 if args.features == 'MS' else 0
-                    outputs = outputs[:, -args.pred_len:, f_dim:]
-                    batch_y = batch_y[:, -args.pred_len:, f_dim:].to(accelerator.device)
-                    loss = criterion(outputs, batch_y)
+                        outputs = model(batch_text, batch_win)
+                    loss = criterion(outputs, batch_lab)
                     train_loss.append(loss.item())
             else:
                 if args.output_attention:
-                    outputs = model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
+                    outputs = model(batch_text, batch_win)[0]
                 else:
-                    outputs = model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
-
-                f_dim = -1 if args.features == 'MS' else 0
-                outputs = outputs[:, -args.pred_len:, f_dim:]
-                batch_y = batch_y[:, -args.pred_len:, f_dim:]
-                loss = criterion(outputs, batch_y)
+                    outputs = model(batch_text, batch_win)
+                loss = criterion(outputs, batch_lab)
                 train_loss.append(loss.item())
 
             if (i + 1) % 100 == 0:
@@ -239,11 +226,17 @@ for ii in range(args.itr):
 
         accelerator.print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
         train_loss = np.average(train_loss)
-        vali_loss, vali_mae_loss = vali(args, accelerator, model, vali_data, vali_loader, criterion, mae_metric)
-        test_loss, test_mae_loss = vali(args, accelerator, model, test_data, test_loader, criterion, mae_metric)
+
+        # Revise to align with classification
+        vali_loss, vali_cr = vali(args, accelerator, model, vali_loader, criterion, dic_cat_labels)
+        test_loss, test_cr = vali(args, accelerator, model, test_loader, criterion, dic_cat_labels)
+
         accelerator.print(
-            "Epoch: {0} | Train Loss: {1:.7f} Vali Loss: {2:.7f} Test Loss: {3:.7f} MAE Loss: {4:.7f}".format(
-                epoch + 1, train_loss, vali_loss, test_loss, test_mae_loss))
+            "Epoch: {0} | Train Loss: {1:.7f} Vali Loss: {2:.7f} Test Loss: {3:.7f}".format(
+                epoch + 1, train_loss, vali_loss, test_loss))
+
+        accelerator.print(' ----- Vali classification report -----\n', vali_cr)
+        accelerator.print(' ----- Test classification report -----\n', test_cr)
 
         early_stopping(vali_loss, model, path)
         if early_stopping.early_stop:
@@ -264,7 +257,8 @@ for ii in range(args.itr):
             accelerator.print('Updating learning rate to {}'.format(scheduler.get_last_lr()[0]))
 
 accelerator.wait_for_everyone()
-if accelerator.is_local_main_process:
-    path = './checkpoints'  # unique checkpoint saving path
-    del_files(path)  # delete checkpoint files
-    accelerator.print('success delete checkpoints')
+# if accelerator.is_local_main_process:
+#     path = './checkpoints'  # unique checkpoint saving path
+#     del_files(path)  # delete checkpoint files
+#     accelerator.print('success delete checkpoints')
+
