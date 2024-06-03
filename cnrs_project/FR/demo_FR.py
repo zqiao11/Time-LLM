@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
 from cnrs_project.FR.linker_FR import linker
-
+def remove_values_from_list(the_list, val):
+   return [value for value in the_list if value != val]
 # loading
 #directory_time_series = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP'
 file_nlp = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP/French_Corpus.csv'
