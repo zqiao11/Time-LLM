@@ -20,6 +20,7 @@ list_of_time_series_data = []
 for row in multi_modal_data["Window"]:
 	a = row.replace("[","")
 	a = a.replace("]","")
+	a = a.replace("\n"," ")
 	row = []
 	total = [] 
 	while '  ' in a :
