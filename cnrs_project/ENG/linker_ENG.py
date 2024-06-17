@@ -132,7 +132,10 @@ def linker(
 									my_window = list(linked_data['Window'])[0]
 									window_data.append(my_window)
 									# for the label, we take reference from the time series label
-									label_final.append(list(linked_data['label'])[0])
+									if result['humAID_class'] == 'not_humanitarian' :
+										label_final.append('Not_Crisis_period')
+									else :
+										label_final.append(list(linked_data['label'])[0])
 
 							else:
 								for zone in place:
@@ -148,7 +151,10 @@ def linker(
 										linked_data = window_df[window_df['Date'] == date[-1]]
 										my_window = list(linked_data['Window'])[0]
 										window_data.append(my_window)
-										label_final.append(list(linked_data['label'])[0])  # Use TS's label as mm sample's label
+										if result['humAID_class'] == 'not_humanitarian' :
+											label_final.append('Not_Crisis_period')
+										else :
+											label_final.append(list(linked_data['label'])[0])  # Use TS's label as mm sample's label
 		df = pd.DataFrame({'Date': date, 'Text': text, 'Window': window_data, 'label': label_final})
 		df_return = pd.concat([df_return, df])
 	return df_return

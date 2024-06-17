@@ -194,7 +194,7 @@ class MultiVariatePatchEmbedding(nn.Module):
         self.padding_patch_layer = ReplicationPad1d((0, stride))
 
         # Backbone, Input encoding: projection of feature vectors onto a d-dim vector space
-        self.value_embedding = TokenEmbedding(patch_len*n_vars, d_model)  # Todo: add n_vars
+        self.value_embedding = TokenEmbedding(patch_len*n_vars, d_model)
 
         # Positional embedding
         # self.position_embedding = PositionalEmbedding(d_model)
@@ -204,9 +204,9 @@ class MultiVariatePatchEmbedding(nn.Module):
 
     def forward(self, x):
         # do patching
-        x = self.padding_patch_layer(x)
-        x = x.unfold(dimension=-1, size=self.patch_len, step=self.stride)  # (32, 11, 6, 4)
-        x = torch.reshape(x, (x.shape[0], x.shape[2], x.shape[1] * x.shape[3]))  # (32, 6, 44)
+        x = self.padding_patch_layer(x)  # (bs, 11, 14)
+        x = x.unfold(dimension=-1, size=self.patch_len, step=self.stride)  # (bs, 11, 6, 4)
+        x = torch.reshape(x, (x.shape[0], x.shape[2], x.shape[1] * x.shape[3]))  # (bs, 6, 44)
         # Input encoding
         x = self.value_embedding(x)
         return self.dropout(x)

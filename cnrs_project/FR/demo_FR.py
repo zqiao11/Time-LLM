@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
 from cnrs_project.FR.linker_FR import linker
-
+def remove_values_from_list(the_list, val):
+   return [value for value in the_list if value != val]
 # loading
 #directory_time_series = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP'
 file_nlp = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP/French_Corpus.csv'
@@ -19,15 +20,19 @@ list_of_time_series_data = []
 for row in multi_modal_data["Window"]:
 	a = row.replace("[","")
 	a = a.replace("]","")
-	a = a.split("\n")
-	for i in range(len(a)) :
-		while '  ' in a[i] :
-			a[i]= a[i].replace('  ',' ')
-		a[i]= a[i].strip(' ')
-		a[i]= a[i].split(" ")
-		for j in range(len(a[i])):
-			a[i][j]= float(a[i][j])
-	list_of_time_series_data.append(np.array(a))
+	a = a.replace("\n"," ")
+	row = []
+	total = []
+	while '  ' in a :
+		a = a.replace('  ',' ')
+	a = a.split(" ")
+	a = remove_values_from_list(a,'')
+	#size of the window
+	for j in range(24) :
+		#number of parameters
+		row=a[6*j:6*j+6]
+		total.append(row)
+	list_of_time_series_data.append(np.array(total))
 
 multi_modal_data['Window']= list_of_time_series_data
 #Knowledge = pd.read_csv(path_knowledge, sep=',')  # (13, 5)

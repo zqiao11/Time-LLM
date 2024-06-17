@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from transformers import LlamaConfig, LlamaModel, LlamaTokenizer, GPT2Config, GPT2Model, GPT2Tokenizer, BertConfig, \
-    BertModel, BertTokenizer
+    BertModel, BertTokenizer, RobertaTokenizer, RobertaModel, RobertaConfig
 from layers.Embed import MultiVariatePatchEmbedding
 import transformers
 from layers.StandardNorm import Normalize
@@ -12,11 +12,13 @@ from layers.StandardNorm import Normalize
 transformers.logging.set_verbosity_error()
 
 
+template = "You are a crisis expert, you will receive a tweet and you must define if it belongs to the 3 following labels : Not_Crisis (which means the tweet does not speak about a crisis), Ecological_Crisis (Which means the tweet speaks about a crisis which can be predicted by meteorological instruments, such as floods or storms) and Sudden_Crisis (the tweet speaks about a crisis which cannot be predictable such as Wildfire or a terrorist attack). Classify this tweet: \n"
+
+
 class Model(nn.Module):
 
     def __init__(self, configs, n_classes, n_vars):
         super(Model, self).__init__()
-        self.seq_len = configs.seq_len
         self.d_ff = configs.d_ff
         self.d_llm = configs.llm_dim
         self.patch_len = configs.patch_len
@@ -61,6 +63,14 @@ class Model(nn.Module):
                     trust_remote_code=True,
                     local_files_only=False
                 )
+
+        elif configs.llm_model == 'Roberta':
+            configuration = RobertaConfig()
+            configuration.output_attentions = True
+            configuration.output_hidden_states = True
+            self.tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
+            self.llm_model = RobertaModel.from_pretrained('roberta-base')
+
         elif configs.llm_model == 'GPT2':
             self.gpt2_config = GPT2Config.from_pretrained('openai-community/gpt2')
 
@@ -151,7 +161,7 @@ class Model(nn.Module):
 
         self.word_embeddings = self.llm_model.get_input_embeddings().weight
         self.vocab_size = self.word_embeddings.shape[0]
-        self.num_tokens = 1000
+        self.num_tokens = 1000  # 1000, reduce to 200
         self.mapping_layer = nn.Linear(self.vocab_size, self.num_tokens)
 
         self.reprogramming_layer = ReprogrammingLayer(configs.d_model, configs.n_heads, self.d_ff, self.d_llm)
@@ -169,19 +179,19 @@ class Model(nn.Module):
         For now, use tweet as prompt prefix. Pool the LLM's output as head's input.
         """
 
-        x_ts = self.normalize_layers(x_ts, 'norm')  # (B, T, C)  (32, 11, 12)
+        x_ts = self.normalize_layers(x_ts, 'norm')  # (B, T, C)  (bs, 12, 11)
         x_ts = x_ts.permute(0, 2, 1).contiguous()
 
         prompt = self.tokenizer(x_text, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
         prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_ts.device))  # (batch, prompt_token, dim)
         source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
 
-        enc_out = self.patch_embedding(x_ts)
+        enc_out = self.patch_embedding(x_ts)  # (bs, n_patch, d_model)  (bs, 6, 16)
         enc_out = self.reprogramming_layer(enc_out, source_embeddings, source_embeddings)
         llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
         dec_out = dec_out[:, :, :self.d_ff]
-        dec_out = dec_out.mean(1)  # pooling  # (32, 32)
+        dec_out = dec_out.mean(1)  # pooling  # (bs, 32)
         pred = self.output_projection(dec_out)
 
         return pred

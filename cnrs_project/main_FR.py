@@ -40,7 +40,7 @@ parser.add_argument('--model_comment', type=str, required=False, default='none',
 parser.add_argument('--seed', type=int, default=2021, help='random seed')
 
 # data loader
-parser.add_argument('--checkpoints', type=str, default='./checkpoints/ENG', help='location of model checkpoints')
+parser.add_argument('--checkpoints', type=str, default='./checkpoints/FR', help='location of model checkpoints')
 
 # model define
 parser.add_argument('--enc_in', type=int, default=7, help='encoder input size')
@@ -73,18 +73,52 @@ parser.add_argument('--lradj', type=str, default='type1', help='adjust learning 
 parser.add_argument('--pct_start', type=float, default=0.2, help='pct_start')
 parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
 
-parser.add_argument('--test_crisis', type=str, default='Earthquake',
-                    choices=['Hurricane', 'Wildfire', 'Flood', 'Earthquake'])
+parser.add_argument('--test_crisis', type=str, default='Flood',
+                    choices=['Fire', 'Flood', 'Storms', 'Hurricane', 'Explosion', 'Collapse', 'ATTACK'])
+
+
+def remove_values_from_list(the_list, val):
+    return [value for value in the_list if value != val]
 
 
 args = parser.parse_args()
 ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
 deepspeed_plugin = DeepSpeedPlugin(hf_ds_config='../ds_config_zero2.json')
 accelerator = Accelerator(kwargs_handlers=[ddp_kwargs], deepspeed_plugin=deepspeed_plugin)
-directory_nlp = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP/English_Corpus'
-directory_time_series = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP/MeteoData-US'
-path_knowledge = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP/crisis_knowledge_EN.csv'
-knowledge = pd.read_csv(path_knowledge, sep=',')  # (10, 3), 3 columns represent Crisis, Places, Path_name (tweets)
+
+
+# directory_nlp = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP/English_Corpus'
+# directory_time_series = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP/MeteoData-FR'
+# path_knowledge = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP/crisis_knowledge_FR.csv'
+# knowledge = pd.read_csv(path_knowledge, sep=',')  # (10, 3), 3 columns represent Crisis, Places, Path_name (tweets)
+
+Test_crisis = [args.test_crisis]
+file_data = '/home/eee/qzz/datasets/CNRS/Crisis-TS-NLP/multi_modal_french.csv'
+
+mm_data = pd.read_csv(file_data, sep="\t")
+#the window is saved as string we need to rechange the type to np array
+list_of_time_series_data = []
+
+
+for row in mm_data["Window"]:
+	a = row.replace("[","")
+	a = a.replace("]","")
+	a = a.replace("\n"," ")
+	row = []
+	total = []
+	while '  ' in a :
+		a = a.replace('  ',' ')
+	a = a.split(" ")
+	a = remove_values_from_list(a,'')
+	#size of the window
+	for j in range(24) :
+		#number of parameters
+		row=a[6*j:6*j+6]
+		total.append(row)
+	list_of_time_series_data.append(np.array(total))
+
+mm_data['Window'] = list_of_time_series_data
+
 
 for ii in range(args.itr):
     # setting record of experiments
@@ -104,11 +138,10 @@ for ii in range(args.itr):
         fix_seed,
         ii)
 
-    train_df, test_df = out_of_type_train_test(knowledge, args.test_crisis,
-                                               linker, directory_nlp, directory_time_series)
+    train_df, test_df = mm_data[~mm_data.Crisis_Type.isin(Test_crisis)], mm_data[mm_data.Crisis_Type.isin(Test_crisis)]
 
     # Map label to int
-    dic_cat_labels = {'Not_Crisis_period': 0, 'Predictible_crisis': 1, 'Sudden_crisis': 2}
+    dic_cat_labels = {0: 'Not_Crisis_period', 1: 'Ecological_crisis', 2: 'Sudden_Crisis'}
     train_df['label'] = train_df['label'].map(dic_cat_labels)
     test_df['label'] = test_df['label'].map(dic_cat_labels)
 
