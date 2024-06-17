@@ -22,10 +22,10 @@ for row in multi_modal_data["Window"]:
 	a = a.replace("]","")
 	a = a.replace("\n"," ")
 	row = []
-	total = []
+	total = [] 
 	while '  ' in a :
 		a = a.replace('  ',' ')
-	a = a.split(" ")
+	a = a.split(" ") 
 	a = remove_values_from_list(a,'')
 	#size of the window
 	for j in range(24) :
